@@ -28,12 +28,31 @@ def getChildrenTXID(txid):
     print strbefore+txid
 #    for child in tree:
 
+def getChildrenNAME(txid):
+
+
 def idsFromXML(xml):
     bs = BeautifulSoup(xml)
     bsids = bs.find_all('id')
     idstrings = [x.getText() for x in bsids]
     return (idstrings)
 
+def idsFromSoup(soup):
+    soup_ids = soup.find_all('id')
+    idstrings = [x.getText() for x in soup_ids]
+    return (idstrings)
+
+def countFromSoup(soup):
+    count = soup.find_all('count')
+    count = [int(x.getText()) for x in count]
+    count = count[0]
+    return (count)
+
+def envFromSoup(soup):
+    env = soup.find_all('webenv')
+    env = [x.getText() for x in env]
+    env = env[0]
+    return (env)
 
 def getPUBMEDids(q1,q2,retmax=1000000):
     strbefore = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&usehistory=y&retmax='+str(retmax)+'&term='
@@ -48,6 +67,48 @@ def getPUBMEDids(q1,q2,retmax=1000000):
     return (out)
 
 
+def getOverlap(q1,qlist,retmax=1000000,dry=False):
+    strbase = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmax='+str(retmax)+'&term='
+    strfetchbase = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&retmax='+str(retmax)+'&rettype=xml&id='
+    strq1 = strbase + q1 + '&usehistory=y'
+    if dry:
+        print strq1
+    else:
+        response1 = urllib2.urlopen(strq1)
+        ressoup = BeautifulSoup(response1.read())
+        #get list of IDs, number or results and webenvironment out of xml
+        ids = idsFromSoup(ressoup)
+        count = countFromSoup(ressoup)
+        env = envFromSoup(ressoup)
+        #warn if not all results have been returned
+        if count > retmax:
+            print ('Warning, more results ['+str(count)+'] than maximum return ['+str(retmax)+']')
+        out = {}
+
+        #set up match counting dictionary
+        for q2 in qlist:
+            out[q2] = 0
+
+        while(len(ids)>0):
+            per_return = 500
+            if per_return > len(ids):
+                per_return = len(ids)
+            current_ids = []
+            for i in range(per_return):
+                current_ids += [ids.pop()]
+            strfetch = strfetchbase + ','.join(current_ids)+'&webenv=' + env
+            response2 = urllib2.urlopen(strfetch)
+            abssoup = BeautifulSoup(response2.read())
+
+            for q2 in qlist:
+                q2 = q2.lower()
+                for entry in abssoup.find_all('medlinecitation'):
+                    text = entry.getText()
+                    text = text.lower()
+                    if text.find(q2) >= 0:
+                        out[q2] += 1
+
+        return(out)
 
 soffi = '38868'
 rosmarinus = '39177'
@@ -55,7 +116,9 @@ Lamiaceae = '4136'
 #x = getChildrenTXID(Lamiaceae)
 test = open('testncbi.xml').read()
 #idsFromXML(test)
-x = getPUBMEDids(q1='Camphor',q2='Salvia+officinalis')
+#x = getPUBMEDids(q1='Camphor',q2='Salvia+officinalis')
+
+x=getOverlap(q1='Camphor',qlist=['salvia officinalis','rosmarinus officinalis','salvia miltiorrhiza','artemisia tridenta','salvia','artemisia','rosmarinus'])
 print x
 #x = getSRAofTXID(soffi)
 #y = getSRAofTXID(rosmarinus)
